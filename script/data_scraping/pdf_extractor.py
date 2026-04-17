@@ -7,6 +7,8 @@ import random
 import io
 from PIL import Image
 from langdetect import detect, LangDetectException
+import cv2
+import numpy as np
 
 # %%
 import pytesseract
@@ -69,6 +71,34 @@ def is_OCR_required(source):
         return True
     else:
         return False
+
+# %%
+def deskew_image(image_path):
+    img = cv2.imread(image_path, 0)
+    img = cv2.bitwise_not(img) # Invert for coordinate calculation
+    coords = np.column_stack(np.where(img > 0))
+    angle = cv2.minAreaRect(coords)[-1]
+    
+    # Adjust the angle logic
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+
+    (h, w) = img.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(cv2.bitwise_not(img), M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    cv2.imwrite("deskewed_image.png", rotated)
+
+def remove_noise(image_path):
+    img = cv2.imread(image_path, 0)
+    kernel = np.ones((1, 1), np.uint8)
+    img = cv2.dilate(img, kernel, iterations=1)
+    img = cv2.erode(img, kernel, iterations=1)
+    # Use Gaussian Blur to smooth out jagged edges of characters
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    cv2.imwrite("cleaned_image.png", img)
 
 # %%
 def OCR(doc: fitz.Document) -> str:
